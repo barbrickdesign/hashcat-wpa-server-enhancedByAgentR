@@ -105,8 +105,14 @@ def estimate_runtime():
 @app.route('/user_profile')
 @login_required
 def user_profile():
-    return render_template('user_profile.html', title='Home', tasks=current_user.uploads[::-1],
-                           benchmark=read_last_benchmark(), devices=hashcat_devices_info(), progress=progress())
+    tasks = current_user.uploads[::-1]
+    total = len(tasks)
+    cracked = sum(1 for t in tasks if t.found_key)
+    running = sum(1 for t in tasks if not t.completed)
+    stats = dict(total=total, cracked=cracked, running=running)
+    return render_template('user_profile.html', title='Home', tasks=tasks,
+                           benchmark=read_last_benchmark(), devices=hashcat_devices_info(),
+                           progress=progress(), stats=stats)
 
 
 @app.route('/progress')
@@ -201,3 +207,36 @@ def hashcat_potfile():
     if hashcat_potfile.exists():
         return hashcat_potfile.read_text()
     return jsonify("Empty hashcat.potfile")
+
+
+@app.route('/delete_task/<int:task_id>', methods=['POST'])
+@login_required
+def delete_task(task_id):
+    task = UploadedTask.query.get(task_id)
+    if task is None:
+        return flask.Response(status=HTTPStatus.NOT_FOUND)
+    if task.user_id != current_user.id:
+        return flask.Response(status=HTTPStatus.FORBIDDEN)
+    if not task.completed:
+        return flask.Response(
+            "Cannot delete a task that is still running. Cancel it first.",
+            status=HTTPStatus.BAD_REQUEST
+        )
+    db.session.delete(task)
+    db.session.commit()
+    return jsonify("Deleted")
+
+
+@app.route('/export_keys')
+@login_required
+def export_keys():
+    lines = []
+    for task in current_user.uploads:
+        if task.found_key:
+            lines.append(f"BSSID={task.bssid}  ESSID={task.essid}  KEY={task.found_key}")
+    content = "\n".join(lines) + ("\n" if lines else "")
+    return flask.Response(
+        content,
+        mimetype="text/plain",
+        headers={"Content-Disposition": "attachment; filename=found_keys.txt"}
+    )

@@ -39,6 +39,20 @@ danger
         <button onclick="updateBenchmark()">Update</button>
     </p>
 
+    <div class="row" style="margin-bottom: 12px;">
+        <div class="col-xs-12">
+            <span class="label label-default" style="font-size:14px; padding:6px 12px;">Total: {{ stats.total }}</span>
+            &nbsp;
+            <span class="label label-success" style="font-size:14px; padding:6px 12px;">Cracked: {{ stats.cracked }}</span>
+            &nbsp;
+            <span class="label label-warning" style="font-size:14px; padding:6px 12px;">Running: {{ stats.running }}</span>
+            &nbsp;
+            {% if stats.cracked > 0 %}
+            <a href="{{ url_for('export_keys') }}" class="btn btn-sm btn-success" aria-label="Download all found encryption keys">&#x2B07; Download found keys</a>
+            {% endif %}
+        </div>
+    </div>
+
     <table class="table table-hover">
         <tr>
             <th>#</th>
@@ -52,6 +66,7 @@ danger
             <th>Status</th>
             <th>Progress</th>
             <th>Found Key</th>
+            <th>Actions</th>
         </tr>
         {%- for task in tasks %}
         <tr class="{{ class_status(task) }}" id="task{{ task.id }}">
@@ -66,9 +81,13 @@ danger
             <td class="status">{{ task.status }}</td>
             <td class="progress"></td>
             <td class="found_key">{{ task.found_key }}</td>
-            {% if not task.completed %}
-            <td><button onclick="cancelTask({{ task.id }})">Cancel</button></td>
-            {% endif %}
+            <td>
+                {% if not task.completed %}
+                <button class="btn btn-xs btn-warning" onclick="cancelTask({{ task.id }})">Cancel</button>
+                {% else %}
+                <button class="btn btn-xs btn-danger" onclick="deleteTask({{ task.id }})">Delete</button>
+                {% endif %}
+            </td>
         </tr>
         {%- endfor %}
     </table>
@@ -89,6 +108,15 @@ danger
         $.get('/cancel/' + task_id).done(function(message) {
             alert(message);
        })
+    }
+
+    function deleteTask(task_id) {
+        if (!confirm('Delete task #' + task_id + '? This action cannot be undone.')) return;
+        $.post('/delete_task/' + task_id).done(function() {
+            $('#task' + task_id).remove();
+        }).fail(function(xhr) {
+            alert('Could not delete task: ' + xhr.responseText);
+        });
     }
 
     function updateProgress(response) {
